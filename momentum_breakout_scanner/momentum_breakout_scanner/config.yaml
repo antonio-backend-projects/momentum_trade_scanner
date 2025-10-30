@@ -1,0 +1,32 @@
+# === SCAN BASE ===
+timeframe: "1Hour"   # usare "1Hour" (non "1H") per Alpaca
+
+# Parametri più permissivi per vedere segnali durante i test
+baseLenDays: 8       # base minima (giorni) per il Donchian "strutturale"
+donchLenHours: 96    # finestra Donchian in ore (esclude la barra corrente)
+rvMin: 1.4           # Relative Volume minimo (test: più basso -> più segnali)
+
+# Modalità trigger
+confirmOnClose: false     # true = solo a chiusura barra; false = intrabar ammesso
+useHighIntrabar: true     # se false e confirmOnClose=false -> usa last close intrabar
+
+# Finestra oraria USA (disattivata in test)
+use1030ET: false          # true = valida solo la barra 10:30 ET
+
+# Pre-segnali (vicinanza al livello)
+showPreSignal: true
+preBufferPct: 0.4         # entro 0.4% dal livello Donchian -> PRE-SIGNAL
+
+# Performance/loop
+batchSize: 80             # quanti simboli per chiamata API (usato in signals.py)
+scanEveryMinutes: 30      # solo quando lanci con WATCH=1
+
+# --- PROFILO PRUDENTE (consigliato a regime) ---
+# baseLenDays: 12
+# donchLenHours: 288
+# rvMin: 2.5
+# confirmOnClose: true
+# useHighIntrabar: false
+# use1030ET: true
+# showPreSignal: false
+# preBufferPct: 0.3

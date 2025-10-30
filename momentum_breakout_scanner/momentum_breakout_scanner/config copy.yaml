@@ -1,0 +1,12 @@
+# === Scanner config ===
+timeframe: "1Hour"
+baseLenDays: 12
+donchLenHours: 288
+rvMin: 2.5
+confirmOnClose: true      # segnali a chiusura barra (consigliato)
+useHighIntrabar: false    # intrabar via HIGH/LOW (più rapido ma più falsi)
+showPreSignal: false
+preBufferPct: 0.20        # distanza dal livello per il pre-segnale (%)
+use1030ET: false          # valida solo alle 10:30 ET
+batchSize: 80             # quanti simboli per richiesta multi-simbolo
+scanEveryMinutes: 60      # usato solo se WATCH=1

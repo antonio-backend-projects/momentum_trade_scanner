@@ -1,0 +1,117 @@
+//@version=6
+indicator("Momentum Breakout Signals — v0.7i (close confirm + intrabar + pre-alert)", overlay=true, max_labels_count=500)
+
+// ===== INPUTS =====
+useLong           = input.bool(true,  "Segnali Long")
+useShort          = input.bool(false, "Segnali Short")
+baseLenDays       = input.int(12,     "Base minima (giorni)", minval=7)
+donchLenHours     = input.int(24*12,  "Finestra breakout (ore)")
+rvMin             = input.float(2.5,  "Relative Volume minimo (consigliato 2.5–3.0)")
+benchmark         = input.symbol("SPY", "Benchmark RS (Daily)")
+use1030ET         = input.bool(false, "Valida solo alle 10:30 ET (mercati USA)")
+showDebug         = input.bool(true,  "Mostra tabella diagnostica")
+
+// --- Patch: modalità segnale ---
+confirmOnClose    = input.bool(true,  "Conferma a chiusura barra (più prudente)", tooltip="Se ON: segnale alla chiusura della candela quando il CLOSE rompe il livello.")
+useHighIntrabar   = input.bool(false, "Intrabar: usa HIGH/LOW per rompere (più rapido, più falsi)", tooltip="Se ON: il segnale scatta appena HIGH supera la banda (o LOW scende sotto), senza attendere la chiusura.")
+showPreSignal     = input.bool(false, "Mostra PRE-SEGNALI di prossimità (solo alert/marker, non influenza i segnali)")
+bufferPct         = input.float(0.20, "Distanza pre-segnale (%)", step=0.05, minval=0.0, tooltip="Pre-avviso quando il prezzo si avvicina al livello entro questa percentuale.")
+
+// ===== FINESTRA 10:30 ET =====
+is1030ETclose = (hour(time, "America/New_York") == 10 and minute(time, "America/New_York") == 30 and barstate.isconfirmed)
+allowEntryBar = (use1030ET ? is1030ETclose : true) and barstate.isconfirmed
+
+// ===== SERIE DAILY (no lookahead) =====
+closeD  = request.security(syminfo.tickerid, "D", close,  barmerge.gaps_off, barmerge.lookahead_off)
+ema20D  = request.security(syminfo.tickerid, "D", ta.ema(close, 20), barmerge.gaps_off, barmerge.lookahead_off)
+sma200D = request.security(syminfo.tickerid, "D", ta.sma(close,200), barmerge.gaps_off, barmerge.lookahead_off)
+
+benchD  = request.security(benchmark,        "D", close,  barmerge.gaps_off, barmerge.lookahead_off)
+rsLine  = closeD / benchD
+rsMA50  = request.security(syminfo.tickerid, "D", ta.sma(rsLine, 50), barmerge.gaps_off, barmerge.lookahead_off)
+
+// ===== BIAS & RS =====
+emaBiasLong  = closeD > ema20D and closeD[1] > ema20D[1] and closeD[2] > ema20D[2]
+emaBiasShort = closeD < ema20D and closeD[1] < ema20D[1] and closeD[2] < ema20D[2]
+
+lrNow  = ta.linreg(rsLine, 10, 0)
+lrPrev = ta.linreg(rsLine, 10, 1)
+rsUp   = (rsLine > rsMA50) and (lrNow > lrPrev)
+rsDown = (rsLine < rsMA50) and (lrNow < lrPrev)
+
+trendOKLong  = closeD > sma200D
+trendOKShort = closeD < sma200D
+
+// ===== DONCHIAN (esclude la barra corrente) =====
+donchLen = math.max(donchLenHours, baseLenDays*24)
+hh = ta.highest(high[1], donchLen)
+ll = ta.lowest(low[1],  donchLen)
+
+// --- Trigger rottura: conferma a chiusura (CLOSE) oppure intrabar (HIGH/LOW) ---
+breakUpConfirmed   = ta.crossover(close,  hh)     // a barra chiusa
+breakDownConfirmed = ta.crossunder(close, ll)
+
+breakUpIntrabar    = high > hh
+breakDownIntrabar  = low  < ll
+
+breakUp   = confirmOnClose ? breakUpConfirmed   : breakUpIntrabar
+breakDown = confirmOnClose ? breakDownConfirmed : breakDownIntrabar
+
+// ===== Relative Volume 1H =====
+rv   = volume / ta.sma(volume, 50)
+rvOK = rv >= rvMin
+
+// ===== SETUP =====
+longCore  = useLong  and emaBiasLong  and rsUp   and trendOKLong  and breakUp   and rvOK and allowEntryBar
+shortCore = useShort and emaBiasShort and rsDown and trendOKShort and breakDown and rvOK and allowEntryBar
+
+// ===== PRE-SEGNALI (solo avviso, non cambia il setup) =====
+nearUp   = close >= hh * (1 - bufferPct/100.0)
+nearDown = close <= ll * (1 + bufferPct/100.0)
+
+// ===== PLOT =====
+plot(ema20D,  "EMA20 D",  color=color.new(color.teal,  0))
+plot(sma200D, "SMA200 D", color=color.new(color.blue, 20))
+plot(hh, "Base High (excl.)", color=color.new(color.green, 60))
+plot(ll, "Base Low  (excl.)", color=color.new(color.red,   60))
+
+// Etichette segnali
+if longCore
+    label.new(x=bar_index, y=low,  text="LONG",  style=label.style_label_up,   color=color.new(color.green, 0), textcolor=color.white, size=size.small)
+if shortCore
+    label.new(x=bar_index, y=high, text="SHORT", style=label.style_label_down, color=color.new(color.red,   0), textcolor=color.white, size=size.small)
+
+// Marker pre-segnale (opzionale)
+plotshape(showPreSignal and nearUp,   title="Near LONG",  style=shape.triangleup,   location=location.belowbar, size=size.tiny, color=color.new(color.green,  0), text="near↑")
+plotshape(showPreSignal and nearDown, title="Near SHORT", style=shape.triangledown, location=location.abovebar, size=size.tiny, color=color.new(color.red,    0), text="near↓")
+
+// ===== ALERTS (messaggi costanti) =====
+alertcondition(longCore,  title="LONG setup",  message="A+ LONG breakout: RS ok, SMA200 ok, RV ok")
+alertcondition(shortCore, title="SHORT setup", message="A+ SHORT breakdown: RS ok, SMA200 ok, RV ok")
+// Pre-alert (facoltativi)
+alertcondition(showPreSignal and nearUp,   title="PRE-LONG near level",  message="Prezzo vicino al breakout HIGH Donchian")
+alertcondition(showPreSignal and nearDown, title="PRE-SHORT near level", message="Prezzo vicino al breakdown LOW Donchian")
+
+// ===== DEBUG TABLE =====
+var table t = table.new(position.top_right, 2, 10, border_width=1)
+if barstate.islast and showDebug
+    table.cell(t, 0, 0, "Condizione", text_color=color.white, bgcolor=color.new(color.gray, 0))
+    table.cell(t, 1, 0, "OK?",        text_color=color.white, bgcolor=color.new(color.gray, 0))
+    table.cell(t, 0, 1, "10:30 ET window")
+    table.cell(t, 1, 1, str.tostring(allowEntryBar))
+    table.cell(t, 0, 2, "EMA bias L/S")
+    table.cell(t, 1, 2, str.tostring(emaBiasLong) + " / " + str.tostring(emaBiasShort))
+    table.cell(t, 0, 3, "RS Up/Down (vs bench)")
+    table.cell(t, 1, 3, str.tostring(rsUp) + " / " + str.tostring(rsDown))
+    table.cell(t, 0, 4, "Trend SMA200 (L/S)")
+    table.cell(t, 1, 4, str.tostring(trendOKLong) + " / " + str.tostring(trendOKShort))
+    table.cell(t, 0, 5, "BreakUp/Down")
+    table.cell(t, 1, 5, str.tostring(breakUp) + " / " + str.tostring(breakDown))
+    table.cell(t, 0, 6, "RV ok (≥"+str.tostring(rvMin)+")")
+    table.cell(t, 1, 6, str.tostring(rvOK) + "  rv=" + str.tostring(rv, format.mintick))
+    table.cell(t, 0, 7, "Confirm on close")
+    table.cell(t, 1, 7, str.tostring(confirmOnClose))
+    table.cell(t, 0, 8, "Intrabar (HIGH/LOW)")
+    table.cell(t, 1, 8, str.tostring(useHighIntrabar))
+    table.cell(t, 0, 9, "Pre-signal (" + str.tostring(bufferPct) + "%)")
+    table.cell(t, 1, 9, str.tostring(showPreSignal))
