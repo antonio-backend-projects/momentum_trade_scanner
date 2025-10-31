@@ -1,0 +1,32 @@
+timeframe: "1Hour"
+baseLenDays: 8
+donchLenHours: 96
+rvMin: 1.4
+confirmOnClose: false
+useHighIntrabar: true
+use1030ET: false
+showPreSignal: true
+preBufferPct: 0.4
+enableTrading: false
+enableOptions: false
+riskPct: 1.0
+partialAtR: 2.0
+partialQtyPct: 50
+trailMode: "none"
+trailPct: 3.0
+optionsDelta: 0.35
+optionsDteMin: 25
+optionsDteMax: 60
+optionsRiskUsd: 200
+batchSize: 80
+scanEveryMinutes: 30
+# prudente (consigliato live):
+# baseLenDays: 12
+# donchLenHours: 288
+# rvMin: 2.5
+# confirmOnClose: true
+# useHighIntrabar: false
+# use1030ET: true
+# showPreSignal: false
+# preBufferPct: 0.3
+# trailMode: "ema20d"

@@ -1,0 +1,14 @@
+services:
+  scanner:
+    build: .
+    image: momentum-scanner:latest
+    working_dir: /app
+    env_file:
+      - .env
+    environment:
+      - PYTHONUNBUFFERED=1
+      - WATCH=1 
+    volumes:
+      - ./state:/app/state
+      - ./tickers.csv:/app/tickers.csv
+    command: python scanner.py
