@@ -1,0 +1,38 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card shadow-sm">
+  <div class="card-body">
+    <h5 class="card-title">Posizioni</h5>
+    <div id="pos-wrap"></div>
+  </div>
+</div>
+<script>
+  async function refresh() {
+    const resp = await fetch('/api/positions');
+    const data = await resp.json();
+    const rows = data.map(p => `
+      <tr>
+        <td>${p.symbol}</td>
+        <td>${p.qty}</td>
+        <td>${p.avg_entry_price}</td>
+        <td>${p.market_value}</td>
+        <td>
+          <button class="btn btn-sm btn-danger" onclick="closePos('${p.symbol}')">Chiudi</button>
+        </td>
+      </tr>`).join("");
+    document.getElementById('pos-wrap').innerHTML = `<div class="table-responsive">
+      <table class="table table-sm table-striped"><thead><tr>
+      <th>Symbol</th><th>Qty</th><th>Avg</th><th>Mkt Value</th><th></th>
+      </tr></thead><tbody>${rows}</tbody></table></div>`;
+  }
+  async function closePos(symbol) {
+    if (!confirm('Chiudere posizione su ' + symbol + '?')) return;
+    const resp = await fetch('/api/close_position', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({symbol})});
+    const txt = await resp.text();
+    alert(txt);
+    refresh();
+  }
+  setInterval(refresh, 10000);
+  refresh();
+</script>
+{% endblock %}

@@ -1,0 +1,30 @@
+{% extends "base.html" %}
+{% block content %}
+<div class="card shadow-sm">
+  <div class="card-body">
+    <h5 class="card-title">Ordini recenti</h5>
+    <div id="orders"></div>
+  </div>
+</div>
+<script>
+  async function refresh() {
+    const resp = await fetch('/api/orders');
+    const data = await resp.json();
+    const rows = data.map(o => `
+      <tr>
+        <td>${o.symbol}</td>
+        <td>${o.side}</td>
+        <td>${o.qty}</td>
+        <td>${o.type}</td>
+        <td>${o.status}</td>
+        <td class="small"><code>${(o.order_class||"")}</code></td>
+      </tr>`).join("");
+    document.getElementById('orders').innerHTML = `<div class="table-responsive">
+      <table class="table table-sm table-striped"><thead><tr>
+      <th>Symbol</th><th>Side</th><th>Qty</th><th>Type</th><th>Status</th><th>Class</th>
+      </tr></thead><tbody>${rows}</tbody></table></div>`;
+  }
+  setInterval(refresh, 10000);
+  refresh();
+</script>
+{% endblock %}

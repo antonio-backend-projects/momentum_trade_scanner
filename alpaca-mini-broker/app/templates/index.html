@@ -1,0 +1,297 @@
+
+{% extends "base.html" %}
+{% block content %}
+<div class="card shadow-sm mb-3">
+  <div class="card-body d-flex flex-wrap align-items-center gap-3">
+    <div><strong>Account:</strong> <span id="acct-id" class="badge bg-secondary">?</span></div>
+    <div><strong>Status:</strong> <span id="acct-status" class="badge bg-secondary">?</span></div>
+    <div><strong>Trading blocked:</strong> <span id="acct-blocked" class="badge bg-secondary">?</span></div>
+    <div class="ms-auto"><strong>Clock:</strong> <span id="clock" class="badge bg-secondary">?</span></div>
+    <button class="btn btn-sm btn-outline-primary" id="btn-test">Test API</button>
+  </div>
+</div>
+
+<div class="row g-4">
+  <!-- Left: Tickers -->
+  <div class="col-lg-5">
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h5 class="card-title mb-3">Ticker</h5>
+        <div class="input-group mb-2">
+          <input id="search-input" class="form-control" placeholder="Cerca per symbol o nome">
+          <button class="btn btn-outline-secondary" id="clear-search" type="button">Pulisci</button>
+          <button class="btn btn-primary" id="go-symbol" type="button">Vai</button>
+        </div>
+        <div class="small text-muted mb-2">Lista precaricata (active / us_equity). Clicca <em>Seleziona</em> per usare un ticker.</div>
+        <div id="search-summary" class="small text-muted mb-2"></div>
+        <div id="search-results" class="table-responsive" style="max-height: 60vh; overflow:auto; border: 1px solid #eee;"></div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Right: Chart + Order -->
+  <div class="col-lg-7">
+    <div class="card shadow-sm mb-4">
+      <div class="card-body">
+        <div class="d-flex align-items-center justify-content-between">
+          <h5 class="card-title mb-0">Grafico <span id="chart-symbol" class="text-muted"></span></h5>
+          <div class="d-flex gap-2">
+            <select id="timeframe" class="form-select form-select-sm" style="width:auto;">
+              <option value="1Day" selected>1D</option>
+              <option value="1Hour">1H</option>
+              <option value="15Min">15m</option>
+              <option value="5Min">5m</option>
+              <option value="1Min">1m</option>
+            </select>
+            <button class="btn btn-sm btn-outline-secondary" id="refresh-chart" type="button">Refresh</button>
+          </div>
+        </div>
+        <div class="mt-3"><canvas id="symbol-chart" height="220"></canvas></div>
+        <div id="chart-hint" class="form-text">Scegli un ticker a sinistra o digita e premi <strong>Vai</strong>.</div>
+      </div>
+    </div>
+
+    <div class="card shadow-sm">
+      <div class="card-body">
+        <h5 class="card-title mb-3">Nuovo Ordine</h5>
+        <form id="order-form" class="row g-2" onsubmit="return false;">
+          <div class="col-6">
+            <label class="form-label">Ticker</label>
+            <input id="symbol" name="symbol" class="form-control" placeholder="NVDA" required>
+          </div>
+          <div class="col-3">
+            <label class="form-label">Side</label>
+            <select name="side" class="form-select">
+              <option value="buy">Buy</option>
+              <option value="sell">Sell</option>
+            </select>
+          </div>
+          <div class="col-3">
+            <label class="form-label">Qty</label>
+            <input name="qty" type="number" step="0.0001" min="0.0001" class="form-control" value="1">
+          </div>
+          <div class="col-3">
+            <label class="form-label">Type</label>
+            <select name="type" class="form-select" id="order_type">
+              <option value="market" selected>Market</option>
+              <option value="limit">Limit</option>
+            </select>
+          </div>
+          <div class="col-3" id="limit_price_group" style="display:none;">
+            <label class="form-label">Limit price</label>
+            <div class="input-group">
+              <input name="limit_price" id="limit_price" type="number" step="0.0001" class="form-control">
+              <button class="btn btn-outline-secondary" type="button" id="btn-suggest">Suggerisci</button>
+            </div>
+            <div id="quote-hint" class="form-text"></div>
+          </div>
+          <div class="col-3">
+            <label class="form-label">TIF</label>
+            <select name="time_in_force" class="form-select">
+              <option value="gtc" selected>GTC</option>
+              <option value="day">DAY</option>
+              <option value="ioc">IOC</option>
+              <option value="fok">FOK</option>
+            </select>
+          </div>
+          <div class="col-3">
+            <label class="form-label">TP price (opz.)</label>
+            <input name="tp_price" type="number" step="0.0001" class="form-control">
+          </div>
+          <div class="col-3">
+            <label class="form-label">SL price (opz.)</label>
+            <input name="sl_price" type="number" step="0.0001" class="form-control">
+          </div>
+          <div class="col-3 d-flex align-items-end">
+            <div class="form-check">
+              <input class="form-check-input" type="checkbox" value="1" id="exth" name="extended_hours">
+              <label class="form-check-label" for="exth">Extended Hours</label>
+            </div>
+          </div>
+          <div class="col-12 d-flex gap-2">
+            <button id="send-order" class="btn btn-primary" type="button">Invia ordine</button>
+            <button class="btn btn-outline-secondary" type="button" id="check-orders">Aggiorna Ordini</button>
+            <button class="btn btn-outline-secondary" type="button" id="check-positions">Aggiorna Posizioni</button>
+          </div>
+        </form>
+
+        <div class="row mt-3 g-3">
+          <div class="col-md-6">
+            <h6>Esito Ordine</h6>
+            <pre id="order-result" class="small bg-light p-2" style="height:160px; overflow:auto;"></pre>
+          </div>
+          <div class="col-md-6">
+            <h6>Ultimi Ordini</h6>
+            <pre id="orders-json" class="small bg-light p-2" style="height:160px; overflow:auto;"></pre>
+          </div>
+          <div class="col-12">
+            <h6>Posizioni</h6>
+            <pre id="positions-json" class="small bg-light p-2" style="height:140px; overflow:auto;"></pre>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<script>
+(function(){
+  const $ = (q) => document.querySelector(q);
+  const pretty = (x)=>{ try{ return JSON.stringify(typeof x==='string'?JSON.parse(x):x,null,2);}catch(_){ return String(x);} };
+
+  // Status bar
+  async function loadStatus(){
+    try {
+      const acct = await (await fetch('/api/account')).json();
+      $('#acct-id').textContent = acct.id || '?';
+      $('#acct-status').textContent = acct.status || '?';
+      $('#acct-blocked').textContent = String(acct.trading_blocked);
+    } catch(e) {
+      $('#acct-id').textContent = 'err';
+    }
+    try {
+      const clk = await (await fetch('/api/clock')).json();
+      $('#clock').textContent = `${clk.is_open ? 'OPEN' : 'CLOSED'} ${clk.next_open||''}`;
+    } catch(e) {
+      $('#clock').textContent = 'err';
+    }
+  }
+  $('#btn-test').addEventListener('click', loadStatus);
+  loadStatus();
+
+  // Chart
+  let _chart;
+  async function drawChart(symbol, timeframe='1Day'){
+    if (!symbol) return;
+    try {
+      const resp = await fetch(`/api/bars?symbol=${encodeURIComponent(symbol)}&timeframe=${encodeURIComponent(timeframe)}&limit=200`);
+      const js = await resp.json();
+      const bars = js.bars || js.results || js || [];
+      if (!Array.isArray(bars) || !bars.length) { $('#chart-hint').textContent = 'Nessun dato disponibile.'; return; }
+      const labels = bars.map(b => (b.t || b.time || b.timestamp || b.start || '').toString().replace('T',' ').slice(0,16));
+      const closes = bars.map(b => Number(b.c ?? b.close));
+      if (window.Chart) {
+        if (_chart) _chart.destroy();
+        _chart = new Chart($('#symbol-chart'), {
+          type: 'line',
+          data: { labels, datasets: [{ label: symbol + ' close', data: closes, tension: 0.2 }] },
+          options: { responsive: true, interaction:{ intersect:false }, scales: { x: { display: true }, y: { display: true } } }
+        });
+        $('#chart-symbol').textContent = '('+symbol+')';
+        $('#chart-hint').textContent = '';
+      } else {
+        $('#chart-hint').textContent = 'Chart.js non caricato.';
+      }
+    } catch(e){ $('#chart-hint').textContent = 'Errore dati grafico.'; }
+  }
+  $('#timeframe').addEventListener('change', ()=> drawChart($('#symbol').value.trim(), $('#timeframe').value));
+  $('#refresh-chart').addEventListener('click', ()=> drawChart($('#symbol').value.trim(), $('#timeframe').value));
+
+  // Tickers preload + filter
+  let ALL_ASSETS = [];
+  async function preloadAssets(){
+    try{
+      const r = await fetch('/api/assets'); // server trims to 2000 by default
+      ALL_ASSETS = await r.json();
+      renderAssets(ALL_ASSETS);
+      $('#search-summary').textContent = `Caricati ${ALL_ASSETS.length} asset.`;
+    }catch(e){
+      $('#search-results').innerHTML = '<div class="text-danger small">Errore nel caricamento degli asset.</div>';
+    }
+  }
+  function renderAssets(list){
+    const rows = (list||[]).map(a => `
+      <tr>
+        <td style="white-space:nowrap"><button class="btn btn-sm btn-outline-primary me-1" data-sym="${a.symbol}">Seleziona</button> ${a.symbol}</td>
+        <td>${a.name||''}</td>
+        <td><span class="badge bg-secondary badge-mono">${a.exchange||''}</span></td>
+        <td>${a.tradeable}</td>
+      </tr>`).join('');
+    $('#search-results').innerHTML = \`
+      <table class="table table-sm table-striped">
+        <thead><tr><th>Symbol</th><th>Name</th><th>Exchange</th><th>Tradeable</th></tr></thead>
+        <tbody>\${rows}</tbody>
+      </table>\`;
+    $('#search-results').querySelectorAll('button[data-sym]').forEach(btn=>{
+      btn.addEventListener('click', ()=> {
+        const sym = btn.getAttribute('data-sym');
+        $('#symbol').value = sym;
+        drawChart(sym, $('#timeframe').value);
+        $('#order-result').textContent = '';
+        $('#symbol-chart').scrollIntoView({behavior:'smooth', block:'center'});
+      });
+    });
+  }
+  function filterAssets(term){
+    term = (term||'').trim().toUpperCase();
+    if (!term) { renderAssets(ALL_ASSETS); $('#search-summary').textContent = `Caricati ${ALL_ASSETS.length} asset.`; return; }
+    const out = ALL_ASSETS.filter(a => (a.symbol||'').toUpperCase().includes(term) || (a.name||'').toUpperCase().includes(term));
+    $('#search-summary').textContent = `Risultati: ${out.length}/${ALL_ASSETS.length}`;
+    renderAssets(out);
+  }
+  $('#search-input').addEventListener('input', ()=> filterAssets($('#search-input').value));
+  $('#clear-search').addEventListener('click', ()=> { $('#search-input').value=''; filterAssets(''); });
+  $('#go-symbol').addEventListener('click', ()=>{
+    const sym = $('#search-input').value.trim().toUpperCase();
+    if (!sym) return;
+    $('#symbol').value = sym;
+    drawChart(sym, $('#timeframe').value);
+  });
+
+  // Quote hint for Limit price
+  async function suggestPrice(){
+    const sym = $('#symbol').value.trim();
+    if (!sym) return;
+    try{
+      const r = await fetch(`/api/quote?symbol=${encodeURIComponent(sym)}`);
+      const js = await r.json();
+      const last = js?.trade?.trade?.p ?? js?.trade?.p;
+      const bid = js?.quote?.quote?.bp ?? js?.quote?.bp;
+      const ask = js?.quote?.quote?.ap ?? js?.quote?.ap;
+      const hint = [`Last: ${last||'?'}`, `Bid: ${bid||'?'}`, `Ask: ${ask||'?'}`].join(' | ');
+      $('#quote-hint').textContent = hint;
+      if (!$('#limit_price').value && last) $('#limit_price').value = Number(last);
+    }catch(e){ $('#quote-hint').textContent = 'N/A'; }
+  }
+  $('#btn-suggest').addEventListener('click', suggestPrice);
+
+  // Toggle limit field
+  const limitGroup = document.getElementById('limit_price_group');
+  function toggleLimit(){ limitGroup.style.display = document.getElementById('order_type').value === 'limit' ? '' : 'none'; }
+  document.getElementById('order_type').addEventListener('change', toggleLimit); toggleLimit();
+
+  // Orders / Positions
+  async function loadOrders(){ try{ const r = await fetch('/api/orders'); document.getElementById('orders-json').textContent = pretty(await r.text()); }catch(e){ document.getElementById('orders-json').textContent = String(e);} }
+  async function loadPositions(){ try{ const r = await fetch('/api/positions'); document.getElementById('positions-json').textContent = pretty(await r.text()); }catch(e){ document.getElementById('positions-json').textContent = String(e);} }
+  document.getElementById('check-orders').addEventListener('click', loadOrders);
+  document.getElementById('check-positions').addEventListener('click', loadPositions);
+
+  // Send order (button click)
+  document.getElementById('send-order').addEventListener('click', async ()=>{
+    const form = document.getElementById('order-form');
+    const fd = new FormData(form);
+    const obj = {};
+    for (const [k,v] of fd.entries()) {
+      if (v === "" || v === null) continue;
+      if (["qty","limit_price","tp_price","sl_price"].includes(k)) obj[k] = Number(v);
+      else if (k === "extended_hours") obj[k] = true;
+      else obj[k] = v;
+    }
+    const out = document.getElementById('order-result');
+    out.textContent = "Invio ordine...";
+    try {
+      const resp = await fetch('/api/order', { method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify(obj)});
+      const txt = await resp.text();
+      out.textContent = `HTTP ${resp.status}\n` + pretty(txt);
+      loadOrders(); loadPositions();
+    } catch (err) {
+      out.textContent = 'Errore di rete: ' + err;
+    }
+  });
+
+  // Init
+  preloadAssets();
+  loadOrders(); loadPositions();
+})();
+</script>
+{% endblock %}
