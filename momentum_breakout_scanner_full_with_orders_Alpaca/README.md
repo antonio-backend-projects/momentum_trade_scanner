@@ -15,8 +15,6 @@ Scanner orario (1H) per segnali Momentum Breakout, con:
 cp .env.example .env
 docker compose build --no-cache
 docker compose run --rm scanner
-# oppure
-WATCH=1 docker compose up scanner
 ```
 
 Parametri in `config.yaml`. Watchlist in `tickers.csv`.
