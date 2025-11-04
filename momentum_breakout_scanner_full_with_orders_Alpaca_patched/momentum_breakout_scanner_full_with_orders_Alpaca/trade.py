@@ -113,7 +113,7 @@ def place_simple_equity(symbol, side, qty=None, type_="market", limit_price=None
 
 # ---------- BRACKET ORDER ----------
 def place_bracket_equity(symbol, side, qty=None, entry_type="market", entry_px=None, tp_px=None, sl_px=None,
-                         tif="day", extended=False, client_id=None, notional=None):
+                         tif="gtc", extended=False, client_id=None, notional=None):
     """
     - entry_type: 'market' o 'limit' (limit richiede entry_px)
     - tp_px: take profit (limit)
