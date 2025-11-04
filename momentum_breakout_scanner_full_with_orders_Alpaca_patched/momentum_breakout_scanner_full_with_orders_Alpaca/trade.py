@@ -1,10 +1,11 @@
-
-import os, time, requests
-from db import insert_order, update_order_status  # kept for backward-compat; not strictly required in this minimal patch
+import requests, os, math, time
+from db import insert_order, update_order_status  # lasciato per compat; non obbligatorio
 
 # ---- Alpaca endpoints ----
 ALP_ENV = os.environ.get("ALPACA_ENV", "paper")
 ALPACA_TRADING_BASE = "https://paper-api.alpaca.markets" if ALP_ENV == "paper" else "https://api.alpaca.markets"
+
+SAFE_BP_BUFFER = float(os.environ.get("SAFE_BP_BUFFER", "0.95"))  # usa max 95% della buying power
 
 def _headers():
     return {
@@ -20,17 +21,54 @@ def _client_id(symbol: str) -> str:
     base = f"{symbol}-{int(time.time())}"
     return base[:48]
 
+def _get_account():
+    r = requests.get(f"{ALPACA_TRADING_BASE}/v2/account", headers=_headers(), timeout=20)
+    r.raise_for_status()
+    return r.json()
+
+def _cap_notional_to_bp(bp: float, requested_notional: float) -> float:
+    """Cap del notional per restare entro BP * buffer."""
+    return min(float(requested_notional), float(bp) * SAFE_BP_BUFFER)
+
+def _qty_from_notional(notional: float, px: float) -> int:
+    """Converte notional in qty intera non negativa."""
+    if px is None or px <= 0:
+        return 0
+    return max(0, int(math.floor(float(notional) / float(px))))
+
 # ---------- SIMPLE EQUITY ORDER ----------
 def place_simple_equity(symbol, side, qty=None, type_="market", limit_price=None, tif="day", extended=False, client_id=None, notional=None):
-    """Submit a simple market/limit order.
-    - Pass either qty (int >=1) or notional (float >= 1). Not both.
-    - MARKET orders are RTH only (extended=False). For pre/after set type_='limit' + extended=True.
+    """
+    - Passa o qty (int >=1) O notional (float >=1), non entrambi.
+    - MARKET solo in RTH (extended=False). In pre/after: type_='limit' + extended=True.
+    - Cap automatico a buying power per evitare 40310000.
     """
     if _panic():
         return {"ok": False, "detail": "panic mode active"}
 
     if qty is not None and notional is not None:
         raise ValueError("Pass only qty OR notional")
+
+    # --- Cap a buying power ---
+    acc = _get_account()
+    bp = float(acc.get("buying_power", 0))
+
+    if type_ == "limit" and limit_price is not None:
+        px = float(limit_price)
+        if notional is not None:
+            notional = _cap_notional_to_bp(bp, float(notional))
+        elif qty is not None:
+            # riduci qty se necessario
+            max_notional = _cap_notional_to_bp(bp, px * 1e12)  # numero enorme, serve solo per calcolare il cap qty
+            qty_cap = _qty_from_notional(max_notional, px)
+            qty = min(int(qty), int(qty_cap))
+    else:
+        # MARKET: se usi notional, cappalo direttamente a BP*buffer
+        if notional is not None:
+            notional = _cap_notional_to_bp(bp, float(notional))
+        # se usi qty senza sapere il prezzo, non applichiamo cap (non abbiamo px certo)
+
+    # --- Body ordine ---
     body = {
         "symbol": symbol,
         "side": side,
@@ -60,6 +98,10 @@ def place_simple_equity(symbol, side, qty=None, type_="market", limit_price=None
     elif type_ != "market":
         raise ValueError(f"unsupported order type: {type_}")
 
+    # MARKET + extended non è consentito
+    if body["type"] == "market" and body.get("extended_hours"):
+        raise ValueError("market orders are not allowed with extended_hours=True; use limit")
+
     url = f"{ALPACA_TRADING_BASE}/v2/orders"
     r = requests.post(url, json=body, headers=_headers(), timeout=20)
     try:
@@ -72,11 +114,11 @@ def place_simple_equity(symbol, side, qty=None, type_="market", limit_price=None
 # ---------- BRACKET ORDER ----------
 def place_bracket_equity(symbol, side, qty=None, entry_type="market", entry_px=None, tp_px=None, sl_px=None,
                          tif="day", extended=False, client_id=None, notional=None):
-    """Submit a bracket order.
-    - entry_type: 'market' or 'limit' (limit requires entry_px)
-    - tp_px: take profit limit price (optional)
-    - sl_px: stop price for stop-loss (optional)
-    - Pass either qty OR notional.
+    """
+    - entry_type: 'market' o 'limit' (limit richiede entry_px)
+    - tp_px: take profit (limit)
+    - sl_px: stop (stop-market)
+    - Passa qty O notional; cap a BP applicato.
     """
     if _panic():
         return {"ok": False, "detail": "panic mode active"}
@@ -84,6 +126,24 @@ def place_bracket_equity(symbol, side, qty=None, entry_type="market", entry_px=N
     if qty is not None and notional is not None:
         raise ValueError("Pass only qty OR notional")
 
+    # --- Cap a buying power ---
+    acc = _get_account()
+    bp = float(acc.get("buying_power", 0))
+    px = float(entry_px) if (entry_type == "limit" and entry_px is not None) else None
+
+    if px is not None:
+        if notional is not None:
+            notional = _cap_notional_to_bp(bp, float(notional))
+        elif qty is not None:
+            max_notional = _cap_notional_to_bp(bp, px * 1e12)
+            qty_cap = _qty_from_notional(max_notional, px)
+            qty = min(int(qty), int(qty_cap))
+    else:
+        # MARKET bracket: consigliato notional → cappiamo a BP*buffer
+        if notional is not None:
+            notional = _cap_notional_to_bp(bp, float(notional))
+
+    # --- Body ordine ---
     body = {
         "symbol": symbol,
         "side": side,
@@ -94,7 +154,7 @@ def place_bracket_equity(symbol, side, qty=None, entry_type="market", entry_px=N
         "client_order_id": client_id or _client_id(symbol),
     }
 
-    if entry_type == "limit":
+    if body["type"] == "limit":
         if entry_px is None:
             raise ValueError("limit entry without entry_px")
         body["limit_price"] = round(float(entry_px), 2)
@@ -102,8 +162,7 @@ def place_bracket_equity(symbol, side, qty=None, entry_type="market", entry_px=N
     if tp_px is not None:
         body["take_profit"] = {"limit_price": round(float(tp_px), 2)}
     if sl_px is not None:
-        # stop-loss as stop-market (no limit leg); change to stop-limit if desired
-        body["stop_loss"] = {"stop_price": round(float(sl_px), 2)}
+        body["stop_loss"] = {"stop_price": round(float(sl_px), 2)}  # stop-market
 
     if notional is not None:
         notional = float(notional)
@@ -118,9 +177,9 @@ def place_bracket_equity(symbol, side, qty=None, entry_type="market", entry_px=N
             raise ValueError("qty < 1")
         body["qty"] = str(q)
 
-    # MARKET orders in extended hours are rejected by Alpaca
+    # MARKET + extended non è consentito
     if body["type"] == "market" and body.get("extended_hours"):
-        raise ValueError("market orders are not allowed with extended_hours=True; use limit" )
+        raise ValueError("market orders are not allowed with extended_hours=True; use limit")
 
     url = f"{ALPACA_TRADING_BASE}/v2/orders"
     r = requests.post(url, json=body, headers=_headers(), timeout=20)
@@ -151,9 +210,9 @@ def place_limit_partial(symbol, side, qty, limit_px, tif="day", client_id=None):
 def panic_close_all():
     if not _panic():
         return {"ok": True, "detail": "not in panic mode"}
-    # Cancel all open orders
+    # Cancella ordini aperti
     requests.delete(f"{ALPACA_TRADING_BASE}/v2/orders", headers=_headers(), timeout=20)
-    # Close positions with market orders
+    # Chiude posizioni a market
     r = requests.get(f"{ALPACA_TRADING_BASE}/v2/positions", headers=_headers(), timeout=20)
     r.raise_for_status()
     for p in r.json():
