@@ -1,0 +1,37 @@
+timeframe: "1Hour"
+baseLenDays: 8
+donchLenHours: 96
+rvMin: 1.4
+confirmOnClose: false
+useHighIntrabar: true
+use1030ET: false
+showPreSignal: true
+preBufferPct: 0.4
+
+enableTrading: true
+enableOptions: false
+
+# R/R e gestione trade
+riskPct: 0.015          # 1.5% dell'equity ≈ $150 per trade su $10k (NOTA: valore decimale!)
+partialAtR: 2.0
+partialQtyPct: 50
+trailMode: "none"
+trailPct: 3.0
+
+optionsDelta: 0.35
+optionsDteMin: 25
+optionsDteMax: 60
+optionsRiskUsd: 200
+
+batchSize: 80
+scanEveryMinutes: 30
+
+# --- live controls ---
+useLongOnly: false       # con $10k puoi anche shortare; metti true se vuoi solo long
+rthOnly: true            # invia ordini solo a mercato aperto; fuori RTH accoda
+time_in_force: gtc       # TP/SL non scadono a fine giornata
+minNotional: 100.0       # notional minimo per trade (frazionali Alpaca)
+maxNotional: 500.0       # tetto per trade (evita size troppo grandi)
+maxConcurrentPositions: 5
+retryMissedSignals: true
+signalQueueTTLMinutes: 240

@@ -1,0 +1,28 @@
+version: "3.9"
+
+services:
+  scanner:
+    build: .
+    container_name: momentum-scanner
+    command: ["python", "-u", "scanner.py"]
+    environment:
+      - TZ=Europe/Rome
+      # --- Alpaca ---
+      - ALPACA_API_KEY=${ALPACA_API_KEY}
+      - ALPACA_API_SECRET=${ALPACA_API_SECRET}
+      - ALPACA_ENV=${ALPACA_ENV:-paper}    # paper | live
+      # --- Guard-rails runtime ---
+      - SAFE_BP_BUFFER=${SAFE_BP_BUFFER:-0.95}   # usa max 95% della buying power
+      # --- Coda segnali (persistente) ---
+      - SIGNALS_DB_PATH=/app/signals.db
+    volumes:
+      - ./config.yaml:/app/config.yaml:ro   # config della strategia
+      - ./signals.db:/app/signals.db        # coda segnali persistente
+      - ./logs:/app/logs                    # (opzionale) log persistenti
+    restart: unless-stopped
+    healthcheck:
+      test: ["CMD", "python", "-c", "import requests,os;h={'APCA-API-KEY-ID':os.getenv('ALPACA_API_KEY'), 'APCA-API-SECRET-KEY':os.getenv('ALPACA_API_SECRET')};import sys;sys.exit(0 if requests.get('https://paper-api.alpaca.markets/v2/clock',headers=h,timeout=10).status_code==200 else 1)"]
+      interval: 60s
+      timeout: 10s
+      retries: 3
+      start_period: 15s
