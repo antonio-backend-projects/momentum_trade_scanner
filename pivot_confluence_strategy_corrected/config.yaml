@@ -1,0 +1,64 @@
+strategy: pivot_confluence_breakout
+timezone: Europe/Rome
+
+universe:
+  main: [SPY, QQQ]
+  confirms:
+    SPY: [QQQ, IWM]
+    QQQ: [SPY, IWM]
+
+data:
+  source: csv
+  folder: ./data
+  timeframe: 1m
+  session:
+    start: "09:30"
+    end:   "16:00"
+
+levels:
+  use_floor_pivots: true
+  use_vwap: true
+  opening_range_min: 5
+  include_pdh_pdl_close: true
+
+rules:
+  # Più selettivo sui livelli/rotture
+  proximity_atr_1m: 0.15          # prima 0.20 → meno falsi "vicino al livello"
+  volume_mult_break: 2.0           # prima 1.5 → chiedi volume più forte
+  break_buffer_atr: 0.20           # prima 0.10 → conferma extra oltre il livello
+  min_confluence: 2                # prima 1 → vuoi almeno 2 conferme (es. VWAP+Pivot oppure inter-asset)
+
+  # Anti-chop: trend e qualità candela
+  level_cooldown_min: 5            # prima 2
+  time_window_min: 0
+  trend_filters:
+    use_ema: true
+    ema_fast: 20
+    ema_slow: 50
+    use_vwap: true                 # prezzo allineato a VWAP
+  candle_filters:
+    min_body_atr: 0.30             # corpo candela ≥ 0.30*ATR nella barra di break
+
+risk:
+  # Rischio per trade basato su SL (nuovo dimensionamento)
+  risk_per_trade_pct: 0.003        # 0.3% dell’equity per trade
+  account_equity: 100000           # imposta il tuo valore reale
+  stop_atr: 0.30
+  take_profit_atr: 0.60            # R:R ≈ 1:2
+  max_positions: 2
+  daily_max_loss_R: 3
+  max_retries_per_level: 1
+
+orders:
+  use_bracket: true
+  time_in_force: day
+  notional_per_trade: 0            # ignorato se usi risk_per_trade_pct
+
+backtest:
+  commission_per_share: 0.005
+  slippage_bps: 2.0                # un filo più prudente
+  start_date: 2025-10-01
+  end_date: 2025-10-31
+  exclude_open_first_min: 30       # evita l’open
+  exclude_close_last_min: 30       # evita il close
+  max_hold_min: 15                 # chiudi presto se non va

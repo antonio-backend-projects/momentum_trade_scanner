@@ -12,19 +12,20 @@ data:
   folder: ./data
   timeframe: 1m
   session:
-    start: "09:30"   # solo documentativo; filtro vero in backtest loader (UTC 13:30–20:00)
+    start: "09:30"   # solo documentativo; il filtro vero è nel loader (UTC 13:30–20:00)
     end: "16:00"
 
 levels:
   use_floor_pivots: true
   use_vwap: true
-  opening_range_min: 5
   include_pdh_pdl_close: true
 
 rules:
   proximity_atr_1m: 0.20
   time_window_min: 0
   volume_mult_break: 1.5
+  opening_range_min: 5      # ⬅️ spostato qui (prima era sotto levels)
+  min_confluence: 1         # ⬅️ NUOVO: n° min di conferme cross-asset
 
 risk:
   max_positions: 2
@@ -43,3 +44,6 @@ backtest:
   slippage_bps: 1.5
   start_date: 2025-10-01
   end_date: 2025-10-31
+  max_hold_min: 30           # ⬅️ NUOVO: durata massima del trade (min)
+  exclude_open_first_min: 3  # ⬅️ NUOVO: escludi i primi N min dell’open
+  exclude_close_last_min: 2  # ⬅️ NUOVO: escludi gli ultimi N min del close

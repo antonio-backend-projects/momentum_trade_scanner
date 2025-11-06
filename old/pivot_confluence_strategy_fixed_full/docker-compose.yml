@@ -1,0 +1,13 @@
+services:
+  strategy:
+    build: .
+    env_file:
+      - .env
+    environment:
+      - TZ=Europe/Rome
+    volumes:
+      - ./data:/app/data
+      - ./config.yaml:/app/config.yaml
+      - ./src:/app/src
+      - ./scripts:/app/scripts
+    command: []

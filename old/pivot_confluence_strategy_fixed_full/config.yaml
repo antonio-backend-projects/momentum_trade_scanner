@@ -1,0 +1,55 @@
+strategy: pivot_confluence_breakout
+timezone: Europe/Rome
+
+universe:
+  main: [SPY, QQQ]
+  confirms:
+    SPY: [QQQ, IWM]
+    QQQ: [SPY, IWM]
+
+data:
+  source: csv
+  folder: ./data
+  timeframe: 1m
+  session:
+    start: "09:30"
+    end:   "16:00"
+
+levels:
+  use_floor_pivots: true
+  use_vwap: true
+  opening_range_min: 5
+  include_pdh_pdl_close: true
+
+rules:
+  proximity_atr_1m: 0.35
+  time_window_min: 0
+  volume_mult_break: 1.1
+  break_buffer_atr: 0.0
+  range_min_atr: 0.0
+  min_confluence: 0
+  level_cooldown_min: 2
+  trend_filters:
+    use_ema: false
+    use_vwap: false
+
+risk:
+  max_positions: 2
+  daily_max_loss_R: 3
+  stop_atr: 0.30
+  take_profit_atr: 0.60
+  max_retries_per_level: 2
+
+orders:
+  use_bracket: true
+  time_in_force: day
+  notional_per_trade: 5000
+
+backtest:
+  commission_per_share: 0.005
+  slippage_bps: 1.5
+  start_date: 2025-10-01
+  end_date: 2025-10-31
+  exclude_open_first_min: 0
+  exclude_close_last_min: 0
+  max_hold_min: 30

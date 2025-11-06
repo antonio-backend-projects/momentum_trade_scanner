@@ -1,0 +1,12 @@
+version: "3.9"
+services:
+  strategy:
+    build: .
+    image: pivot-confluence:latest
+    container_name: pivot-confluence
+    env_file:
+      - .env
+    volumes:
+      - ./:/app
+    working_dir: /app
+    entrypoint: ["sh", "-c", "python src/main.py --mode backtest --config config.yaml"]
