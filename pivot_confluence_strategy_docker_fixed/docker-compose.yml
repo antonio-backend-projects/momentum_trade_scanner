@@ -1,0 +1,16 @@
+services:
+  strategy:
+    build: .
+    container_name: pivot-confluence
+    env_file:
+      - .env
+    working_dir: /app
+    volumes:
+      - ./data:/app/data
+      - ./config.yaml:/app/config.yaml
+    environment:
+      - MODE=${MODE:-backtest}
+      - START=${START:-}
+      - END=${END:-}
+      - CONFIG=${CONFIG:-config.yaml}
+    command: []
